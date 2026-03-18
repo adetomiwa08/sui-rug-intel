@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Menu, X } from 'lucide-react'
+import logo from '../assets/logo.png'
 
 export default function Navbar() {
   const [menuOpen, setMenuOpen] = useState(false)
@@ -32,8 +33,8 @@ export default function Navbar() {
   transition={{ type: 'spring', stiffness: 300 }}
   className="w-10 h-10 rounded-lg flex items-center justify-center overflow-hidden"
 >
-  <img
-    src="/src/assets/logo.png"
+    <img
+    src={logo}
     alt="SUI RUG INTEL"
     className="w-10 h-10 object-contain"
     style={{ mixBlendMode: 'screen' }}
