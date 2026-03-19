@@ -5,55 +5,7 @@ import {
   SearchIcon, Wallet, FileCode, ArrowRightLeft,
   AlertTriangle, Shield, ChevronRight, Loader
 } from 'lucide-react'
-
-const mockWalletResult = {
-  type: 'wallet',
-  address: '0x9a7b...4f2c',
-  label: 'Known Rugger — The Ghost',
-  riskLevel: 'DANGER',
-  riskScore: 94,
-  totalTxns: '1,842',
-  tokensCreated: 3,
-  firstSeen: 'Jan 12, 2026',
-  lastActive: '2d ago',
-  totalVolume: '$2.1M',
-  flagged: true,
-  flagReason: 'Known rug developer — 3 confirmed rugs',
-}
-
-const mockTokenResult = {
-  type: 'token',
-  address: '0x4f2a...9c1d',
-  symbol: 'MOONCAT',
-  name: 'Moon Cat Finance',
-  riskLevel: 'RUG',
-  riskScore: 97,
-  price: '$0.000001',
-  marketCap: '$0',
-  status: 'RUGGED',
-  flagged: true,
-  flagReason: 'Confirmed rug — liquidity fully drained',
-}
-
-const mockTxResult = {
-  type: 'transaction',
-  hash: '0xdead...beef01',
-  status: 'SUCCESS',
-  type_label: 'Liquidity Remove',
-  amount: '$1.2M',
-  from: '0x9a7b...4f2c',
-  to: 'Liquidity Pool',
-  time: 'Mar 15, 2026 — 03:14 AM',
-  flagged: true,
-  flagReason: 'Known rug transaction — full liquidity drain',
-}
-
-function detectQueryType(q) {
-  if (q.toLowerCase().includes('dead') || q.toLowerCase().includes('beef')) return 'transaction'
-  if (q.startsWith('0x') && q.length > 50) return 'token'
-  if (q.startsWith('0x')) return 'wallet'
-  return 'token'
-}
+import { fetchSearch } from '../services/api.js'
 
 const riskColor = (level) => {
   if (level === 'DANGER' || level === 'RUG') return { color: '#FF4444', bg: 'rgba(255,68,68,0.1)', border: 'rgba(255,68,68,0.25)' }
@@ -206,17 +158,30 @@ export default function SearchPage() {
   const [result, setResult] = useState(null)
   const [searched, setSearched] = useState(false)
 
-  const runSearch = (q) => {
+const runSearch = (q) => {
     setLoading(true)
     setSearched(true)
     setResult(null)
-    setTimeout(() => {
-      const type = detectQueryType(q)
-      if (type === 'wallet') setResult(mockWalletResult)
-      else if (type === 'token') setResult(mockTokenResult)
-      else setResult(mockTxResult)
-      setLoading(false)
-    }, 1500)
+    fetchSearch(q)
+      .then((data) => {
+        if (data.success) {
+          setResult({
+            type: data.type,
+            address: q,
+            label: data.type === 'wallet' ? 'Wallet Address' : data.type,
+            riskLevel: 'MEDIUM',
+            riskScore: 50,
+            flagged: false,
+            ...data.data,
+          })
+        } else {
+          setResult(null)
+        }
+        setLoading(false)
+      })
+      .catch(() => {
+        setLoading(false)
+      })
   }
 
   useEffect(() => {

@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { fetchNetworkStats } from '../services/api.js'
 import { motion } from 'framer-motion'
 import { useNavigate } from 'react-router-dom'
 import {
@@ -44,15 +45,6 @@ const topTokens = [
   { rank: 4, symbol: 'TURBOS', name: 'Turbos Finance', volume: '$84M', change: '+7.1%', positive: true, txns: '320K', marketCap: '$210M', fdv: '$350M' },
   { rank: 5, symbol: 'SUIFRENS', name: 'SuiFrens', volume: '$52M', change: '-1.4%', positive: false, txns: '210K', marketCap: '$98M', fdv: '$140M' },
   { rank: 6, symbol: 'BLUB', name: 'Blub', volume: '$41M', change: '+12.3%', positive: true, txns: '198K', marketCap: '$76M', fdv: '$95M' },
-]
-
-const networkStats = [
-  { label: 'Current TPS', value: '4,821', icon: Zap, color: '#4DA2FF', sub: 'transactions/sec' },
-  { label: 'Avg Block Time', value: '0.4s', icon: Clock, color: '#6FE3FF', sub: 'per epoch' },
-  { label: 'Active Validators', value: '114', icon: Server, color: '#7DD3FC', sub: 'online now' },
-  { label: 'Network Health', value: '99.9%', icon: Cpu, color: '#4ade80', sub: 'uptime' },
-  { label: '24h Transactions', value: '12.4M', icon: Activity, color: '#a78bfa', sub: 'last 24 hours' },
-  { label: 'SUI Price', value: '$1.84', icon: TrendingUp, color: '#34d399', sub: '+3.2% today' },
 ]
 
 const CustomTooltip = ({ active, payload, label, suffix = '' }) => {
@@ -101,9 +93,26 @@ function SectionHeader({ title, sub }) {
 }
 
 export default function Dashboard() {
+  const [liveStats, setLiveStats] = useState(null)
+
+  useEffect(() => {
+    fetchNetworkStats().then((data) => {
+      if (data.success) setLiveStats(data.data)
+    }).catch(() => {})
+  }, [])
+  
   const [activeTab, setActiveTab] = useState('7d')
   const navigate = useNavigate()
   const tabs = ['24h', '7d', '30d']
+
+  const networkStats = [
+  { label: 'Current TPS', value: liveStats?.tps || '4,821', icon: Zap, color: '#4DA2FF', sub: 'transactions/sec' },
+  { label: 'Latest Checkpoint', value: liveStats?.latestCheckpoint ? Number(liveStats.latestCheckpoint).toLocaleString() : '---', icon: Clock, color: '#6FE3FF', sub: 'blocks' },
+  { label: 'Active Validators', value: liveStats?.activeValidators?.toString() || '114', icon: Server, color: '#7DD3FC', sub: 'online now' },
+  { label: 'Network Health', value: liveStats?.networkHealth || '99.9%', icon: Cpu, color: '#4ade80', sub: 'uptime' },
+  { label: '24h Transactions', value: '12.4M', icon: Activity, color: '#a78bfa', sub: 'last 24 hours' },
+  { label: 'SUI Price', value: '$1.84', icon: TrendingUp, color: '#34d399', sub: '+3.2% today' },
+]
 
   return (
     <div className="min-h-screen px-6 py-10 max-w-7xl mx-auto" style={{ color: '#F8FAFC' }}>
