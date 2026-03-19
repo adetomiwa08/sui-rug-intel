@@ -29,3 +29,18 @@ export async function fetchWalletInfo(address) {
   const res = await fetch(`${BASE_URL}/api/wallets/${address}`)
   return res.json()
 }
+
+export async function fetchTopTokens() {
+  const res = await fetch(`${BASE_URL}/api/dex/tokens`)
+  return res.json()
+}
+
+export async function fetchTokenByAddress(address) {
+  const res = await fetch(`${BASE_URL}/api/dex/tokens/${address}`)
+  return res.json()
+}
+
+export async function fetchSearchTokens(query) {
+  const res = await fetch(`${BASE_URL}/api/dex/search?q=${encodeURIComponent(query)}`)
+  return res.json()
+}

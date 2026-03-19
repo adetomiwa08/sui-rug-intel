@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { fetchNetworkStats } from '../services/api.js'
+import { fetchNetworkStats, fetchTopTokens } from '../services/api.js'
 import { motion } from 'framer-motion'
 import { useNavigate } from 'react-router-dom'
 import {
@@ -36,15 +36,6 @@ const gasFeesData = [
   { time: '16:00', fee: 0.0048 },
   { time: '20:00', fee: 0.0039 },
   { time: '23:59', fee: 0.0029 },
-]
-
-const topTokens = [
-  { rank: 1, symbol: 'SUI', name: 'Sui', volume: '$842M', change: '+4.2%', positive: true, txns: '2.1M', marketCap: '$4.8B', fdv: '$5.2B' },
-  { rank: 2, symbol: 'USDC', name: 'USD Coin', volume: '$310M', change: '+0.1%', positive: true, txns: '980K', marketCap: '$1.2B', fdv: '$1.2B' },
-  { rank: 3, symbol: 'CETUS', name: 'Cetus Protocol', volume: '$128M', change: '-2.8%', positive: false, txns: '440K', marketCap: '$320M', fdv: '$480M' },
-  { rank: 4, symbol: 'TURBOS', name: 'Turbos Finance', volume: '$84M', change: '+7.1%', positive: true, txns: '320K', marketCap: '$210M', fdv: '$350M' },
-  { rank: 5, symbol: 'SUIFRENS', name: 'SuiFrens', volume: '$52M', change: '-1.4%', positive: false, txns: '210K', marketCap: '$98M', fdv: '$140M' },
-  { rank: 6, symbol: 'BLUB', name: 'Blub', volume: '$41M', change: '+12.3%', positive: true, txns: '198K', marketCap: '$76M', fdv: '$95M' },
 ]
 
 const CustomTooltip = ({ active, payload, label, suffix = '' }) => {
@@ -100,6 +91,14 @@ export default function Dashboard() {
       if (data.success) setLiveStats(data.data)
     }).catch(() => {})
   }, [])
+
+  const [topTokens, setTopTokens] = useState([])
+
+useEffect(() => {
+  fetchTopTokens().then((data) => {
+    if (data.success) setTopTokens(data.data)
+  }).catch(() => {})
+}, [])
   
   const [activeTab, setActiveTab] = useState('7d')
   const navigate = useNavigate()
@@ -281,7 +280,7 @@ export default function Dashboard() {
 
       {/* Top Tokens Table */}
       <GlassCard delay={0.4}>
-        <SectionHeader title="Top Tokens by Volume" sub="Click any token to view full details" />
+        <SectionHeader title="Top Tokens by Volume" sub={topTokens.length > 0 ? `${topTokens.length} real SUI tokens` : 'Loading real data...'} />
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead style={{ borderBottom: '1px solid rgba(77,162,255,0.1)' }}>
@@ -293,40 +292,48 @@ export default function Dashboard() {
               </tr>
             </thead>
             <tbody>
-              {topTokens.map((t, i) => (
-                <motion.tr
-                  key={t.rank}
-                  initial={{ opacity: 0, x: -10 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: 0.5 + i * 0.07 }}
-                  whileHover={{ backgroundColor: 'rgba(77,162,255,0.06)' }}
-                  onClick={() => navigate(`/token/${t.symbol}`)}
-                  className="cursor-pointer transition-colors duration-150 group"
-                  style={{ borderBottom: i < topTokens.length - 1 ? '1px solid rgba(77,162,255,0.06)' : 'none' }}
-                >
-                  <td className="py-4 pr-4" style={{ color: '#4DA2FF55' }}>{t.rank}</td>
-                  <td className="py-4 pr-4">
-                    <div>
-                      <p className="font-bold" style={{ color: '#F8FAFC' }}>{t.symbol}</p>
-                      <p className="text-xs" style={{ color: '#4DA2FF66' }}>{t.name}</p>
-                    </div>
-                  </td>
-                  <td className="py-4 pr-4 font-semibold" style={{ color: '#6FE3FF' }}>{t.marketCap}</td>
-                  <td className="py-4 pr-4" style={{ color: '#4DA2FF99' }}>{t.fdv}</td>
-                  <td className="py-4 pr-4 font-medium" style={{ color: '#F8FAFC' }}>{t.volume}</td>
-                  <td className="py-4 pr-4 font-semibold"
-                    style={{ color: t.positive ? '#4ade80' : '#f87171' }}>{t.change}</td>
-                  <td className="py-4 pr-4" style={{ color: '#4DA2FF88' }}>{t.txns}</td>
-                  <td className="py-4">
-                    <motion.div
-                      className="opacity-0 group-hover:opacity-100 transition-opacity duration-200"
-                      whileHover={{ x: 3 }}
-                    >
-                      <ChevronRight className="w-4 h-4" style={{ color: '#4DA2FF' }} />
-                    </motion.div>
-                  </td>
-                </motion.tr>
-              ))}
+{topTokens.map((t, i) => (
+  <motion.tr
+    key={i}
+    initial={{ opacity: 0, x: -10 }}
+    animate={{ opacity: 1, x: 0 }}
+    transition={{ delay: 0.5 + i * 0.07 }}
+    whileHover={{ backgroundColor: 'rgba(77,162,255,0.06)' }}
+    onClick={() => navigate(`/token/${t.address}`)}
+    className="cursor-pointer transition-colors duration-150 group"
+    style={{ borderBottom: i < topTokens.length - 1 ? '1px solid rgba(77,162,255,0.06)' : 'none' }}
+  >
+    <td className="py-4 pr-4" style={{ color: '#4DA2FF55' }}>{i + 1}</td>
+    <td className="py-4 pr-4">
+      <div className="flex items-center gap-2">
+        {t.imageUrl && (
+          <img src={t.imageUrl} alt={t.symbol}
+            className="w-7 h-7 rounded-full object-contain"
+            onError={(e) => e.target.style.display = 'none'}
+          />
+        )}
+        <div>
+          <p className="font-bold" style={{ color: '#F8FAFC' }}>{t.symbol}</p>
+          <p className="text-xs" style={{ color: '#4DA2FF66' }}>{t.name}</p>
+        </div>
+      </div>
+    </td>
+    <td className="py-4 pr-4 font-semibold" style={{ color: '#6FE3FF' }}>{t.marketCap}</td>
+    <td className="py-4 pr-4" style={{ color: '#4DA2FF99' }}>{t.fdv}</td>
+    <td className="py-4 pr-4 font-medium" style={{ color: '#F8FAFC' }}>{t.volume24h}</td>
+    <td className="py-4 pr-4 font-semibold"
+      style={{ color: t.positive ? '#4ade80' : '#f87171' }}>{t.change24h}</td>
+    <td className="py-4 pr-4" style={{ color: '#4DA2FF88' }}>{t.txns24h}</td>
+    <td className="py-4">
+      <motion.div
+        className="opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+        whileHover={{ x: 3 }}
+      >
+        <ChevronRight className="w-4 h-4" style={{ color: '#4DA2FF' }} />
+      </motion.div>
+    </td>
+  </motion.tr>
+))}
             </tbody>
           </table>
         </div>
