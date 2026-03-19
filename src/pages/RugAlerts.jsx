@@ -1,69 +1,10 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useNavigate } from 'react-router-dom'
 import {
   AlertTriangle, Filter, Search, Clock,
-  TrendingDown, Wallet, ExternalLink, ChevronRight
+  TrendingDown, Wallet, ExternalLink, ChevronRight, Loader
 } from 'lucide-react'
-
-const alerts = [
-  {
-    id: 1, token: 'MOONCAT', name: 'Moon Cat Finance',
-    risk: 'RUG', riskScore: 97, time: '2m ago', status: 'CONFIRMED RUG',
-    devWallet: '0x4f2a...9c1d', liquidityDrained: '$842K',
-    holders: '4,821', change: '-99.8%',
-    reason: ['Liquidity removed', 'Dev wallet dumped 100%', 'Contract ownership not renounced'],
-  },
-  {
-    id: 2, token: 'SUIPEPE', name: 'SUI Pepe',
-    risk: 'HIGH', riskScore: 84, time: '8m ago', status: 'SUSPICIOUS',
-    devWallet: '0x8b1c...3e2f', liquidityDrained: '$210K',
-    holders: '1,203', change: '-42.1%',
-    reason: ['Dev wallet holds 28%', 'No audit', 'Honeypot detected'],
-  },
-  {
-    id: 3, token: 'SUIDOGE', name: 'SUI Doge',
-    risk: 'HIGH', riskScore: 78, time: '15m ago', status: 'SUSPICIOUS',
-    devWallet: '0x2d9f...7a4b', liquidityDrained: '$94K',
-    holders: '892', change: '-18.4%',
-    reason: ['Mint function active', 'Dev selling steadily'],
-  },
-  {
-    id: 4, token: 'ROCKETX', name: 'Rocket X',
-    risk: 'MEDIUM', riskScore: 61, time: '22m ago', status: 'WATCH',
-    devWallet: '0x6e3c...1d8a', liquidityDrained: '$0',
-    holders: '3,100', change: '-8.2%',
-    reason: ['Unverified contract', 'Low liquidity'],
-  },
-  {
-    id: 5, token: 'SUIINU', name: 'SUI Inu',
-    risk: 'RUG', riskScore: 99, time: '31m ago', status: 'CONFIRMED RUG',
-    devWallet: '0x9a7b...4f2c', liquidityDrained: '$1.2M',
-    holders: '9,441', change: '-100%',
-    reason: ['Liquidity fully drained', 'Dev vanished', 'Telegram deleted'],
-  },
-  {
-    id: 6, token: 'SAFEMOON2', name: 'Safe Moon 2.0',
-    risk: 'RUG', riskScore: 95, time: '45m ago', status: 'CONFIRMED RUG',
-    devWallet: '0x3k9l...2m1n', liquidityDrained: '$380K',
-    holders: '2,210', change: '-98.2%',
-    reason: ['Copy of known rug contract', 'Liquidity removed in single tx'],
-  },
-  {
-    id: 7, token: 'SUIFLOKI', name: 'SUI Floki',
-    risk: 'HIGH', riskScore: 81, time: '52m ago', status: 'SUSPICIOUS',
-    devWallet: '0x7p2q...8r3s', liquidityDrained: '$44K',
-    holders: '601', change: '-31.7%',
-    reason: ['Dev wallet active selling', 'No liquidity lock'],
-  },
-  {
-    id: 8, token: 'AQUAFI', name: 'Aqua Finance',
-    risk: 'MEDIUM', riskScore: 58, time: '1h ago', status: 'WATCH',
-    devWallet: '0x1z2y...3x4w', liquidityDrained: '$0',
-    holders: '1,840', change: '-5.1%',
-    reason: ['New contract < 24h old', 'Small liquidity pool'],
-  },
-]
 
 const riskConfig = {
   RUG: { color: '#FF4444', bg: 'rgba(255,68,68,0.1)', border: 'rgba(255,68,68,0.25)', glow: '0 0 20px rgba(255,68,68,0.15)' },
@@ -74,18 +15,87 @@ const riskConfig = {
 
 const filters = ['ALL', 'RUG', 'HIGH', 'MEDIUM', 'WATCH']
 
-const summaryStats = [
-  { label: 'Rugs Today', value: '3', color: '#FF4444', icon: TrendingDown },
-  { label: 'High Risk', value: '3', color: '#f97316', icon: AlertTriangle },
-  { label: 'Under Watch', value: '2', color: '#fbbf24', icon: Clock },
-  { label: 'Wallets Affected', value: '22.3K', color: '#4DA2FF', icon: Wallet },
-]
-
 export default function RugAlerts() {
   const [activeFilter, setActiveFilter] = useState('ALL')
   const [search, setSearch] = useState('')
   const [expanded, setExpanded] = useState(null)
+  const [alerts, setAlerts] = useState([])
+  const [loadingAlerts, setLoadingAlerts] = useState(true)
   const navigate = useNavigate()
+  const API = import.meta.env.VITE_API_URL || 'https://sui-rug-intel-backend.onrender.com'
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      fetch(`${API}/api/dex/tokens`)
+        .then(r => r.json())
+        .then(data => {
+          if (data.success && data.data) {
+            const flagged = data.data
+              .filter(t => {
+                const change = parseFloat(t.change24h?.replace(/[^0-9.-]/g, '') || 0)
+                const isNegative = t.change24h?.includes('-')
+                const drop = isNegative ? Math.abs(change) : 0
+                return drop > 15 || t.liquidityRaw < 50000
+              })
+              .map((t, i) => {
+                const change = parseFloat(t.change24h?.replace(/[^0-9.-]/g, '') || 0)
+                const isNegative = t.change24h?.includes('-')
+                const drop = isNegative ? Math.abs(change) : 0
+                const risk = t.liquidityRaw < 5000 ? 'RUG'
+                  : t.liquidityRaw < 20000 || drop > 50 ? 'HIGH'
+                  : drop > 15 ? 'MEDIUM' : 'LOW'
+                const riskScore = t.liquidityRaw < 5000 ? 95
+                  : t.liquidityRaw < 20000 ? 80
+                  : drop > 50 ? 75
+                  : drop > 30 ? 60 : 45
+                const status = risk === 'RUG' ? 'CONFIRMED RUG'
+                  : risk === 'HIGH' ? 'SUSPICIOUS' : 'WATCH'
+                const reasons = []
+                if (t.liquidityRaw < 5000) reasons.push('Liquidity nearly drained')
+                if (t.liquidityRaw < 20000) reasons.push('Very low liquidity')
+                if (drop > 50) reasons.push(`Price dropped ${drop.toFixed(0)}% in 24h`)
+                if (drop > 15) reasons.push('Significant price decline detected')
+                if (t.sells24h > t.buys24h * 2) reasons.push('Heavy sell pressure detected')
+                if (reasons.length === 0) reasons.push('Unusual trading activity detected')
+                return {
+                  id: i + 1,
+                  token: t.symbol,
+                  name: t.name,
+                  risk,
+                  riskScore,
+                  time: 'Live',
+                  status,
+                  devWallet: 'Check SuiScan',
+                  liquidityDrained: t.liquidity,
+                  holders: 'N/A',
+                  change: t.change24h,
+                  reason: reasons,
+                  address: t.address,
+                  pairUrl: t.url,
+                  imageUrl: t.imageUrl,
+                }
+              })
+              .sort((a, b) => b.riskScore - a.riskScore)
+            setAlerts(flagged)
+          }
+          setLoadingAlerts(false)
+        })
+        .catch(() => setLoadingAlerts(false))
+    }, 0)
+    return () => clearTimeout(timer)
+  }, [API])
+
+  // Dynamic summary stats
+  const rugCount = alerts.filter(a => a.risk === 'RUG').length
+  const highCount = alerts.filter(a => a.risk === 'HIGH').length
+  const watchCount = alerts.filter(a => a.status === 'WATCH').length
+
+  const summaryStats = [
+    { label: 'Rugs Detected', value: rugCount.toString(), color: '#FF4444', icon: TrendingDown },
+    { label: 'High Risk', value: highCount.toString(), color: '#f97316', icon: AlertTriangle },
+    { label: 'Under Watch', value: watchCount.toString(), color: '#fbbf24', icon: Clock },
+    { label: 'Tokens Flagged', value: alerts.length.toString(), color: '#4DA2FF', icon: Wallet },
+  ]
 
   const filtered = alerts.filter((a) => {
     const matchFilter = activeFilter === 'ALL' || a.risk === activeFilter ||
@@ -160,7 +170,7 @@ export default function RugAlerts() {
 
       {/* Filters + Search */}
       <div className="flex flex-col md:flex-row gap-4 mb-8">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <Filter className="w-4 h-4 shrink-0" style={{ color: '#4DA2FF66' }} />
           {filters.map((f) => (
             <button
@@ -194,10 +204,7 @@ export default function RugAlerts() {
         </div>
 
         <div className="flex items-center gap-2 flex-1 px-4 py-2 rounded-xl"
-          style={{
-            background: 'rgba(13,31,45,0.9)',
-            border: '1px solid rgba(77,162,255,0.15)',
-          }}>
+          style={{ background: 'rgba(13,31,45,0.9)', border: '1px solid rgba(77,162,255,0.15)' }}>
           <Search className="w-4 h-4 shrink-0" style={{ color: '#4DA2FF66' }} />
           <input
             type="text"
@@ -212,9 +219,26 @@ export default function RugAlerts() {
 
       {/* Alert Cards */}
       <div className="flex flex-col gap-4 pb-20">
+
+        {/* Loading */}
+        {loadingAlerts && (
+          <div className="flex items-center justify-center py-20">
+            <div className="text-center">
+              <motion.div
+                animate={{ rotate: 360 }}
+                transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+                className="mx-auto mb-4"
+              >
+                <Loader className="w-10 h-10" style={{ color: '#FF4444' }} />
+              </motion.div>
+              <p className="text-sm" style={{ color: '#FF444477' }}>Scanning for rug patterns...</p>
+            </div>
+          </div>
+        )}
+
         <AnimatePresence>
-          {filtered.map((alert, i) => {
-            const rc = riskConfig[alert.risk]
+          {!loadingAlerts && filtered.map((alert, i) => {
+            const rc = riskConfig[alert.risk] || riskConfig.LOW
             const isExpanded = expanded === alert.id
 
             return (
@@ -237,14 +261,12 @@ export default function RugAlerts() {
                   onClick={() => setExpanded(isExpanded ? null : alert.id)}
                 >
                   <div className="flex items-center gap-4">
-                    {/* Risk indicator */}
-                    <div className="flex flex-col items-center gap-1">
-                      <motion.div
-                        animate={alert.risk === 'RUG' ? { scale: [1, 1.3, 1] } : {}}
-                        transition={{ duration: 1, repeat: Infinity }}
-                      >
-                        <AlertTriangle className="w-5 h-5" style={{ color: rc.color }} />
-                      </motion.div>
+                    <div className="w-10 h-10 rounded-xl flex items-center justify-center overflow-hidden shrink-0"
+                      style={{ background: rc.bg, border: `1px solid ${rc.border}` }}>
+                      {alert.imageUrl
+                        ? <img src={alert.imageUrl} alt={alert.token} className="w-8 h-8 object-contain rounded-lg" onError={(e) => e.target.style.display = 'none'} />
+                        : <AlertTriangle className="w-4 h-4" style={{ color: rc.color }} />
+                      }
                     </div>
 
                     <div>
@@ -266,7 +288,7 @@ export default function RugAlerts() {
                     </div>
                     <div className="hidden md:flex flex-col items-end">
                       <span className="text-sm font-semibold" style={{ color: '#F8FAFC' }}>{alert.liquidityDrained}</span>
-                      <span className="text-xs" style={{ color: '#4DA2FF55' }}>drained</span>
+                      <span className="text-xs" style={{ color: '#4DA2FF55' }}>liquidity</span>
                     </div>
                     <div className="flex flex-col items-end">
                       <span className="text-xs font-bold px-2 py-1 rounded-lg"
@@ -316,8 +338,8 @@ export default function RugAlerts() {
                           <p className="text-xs uppercase tracking-wider" style={{ color: '#4DA2FF66' }}>Details</p>
                           {[
                             { label: 'Risk Score', value: `${alert.riskScore}/100` },
-                            { label: 'Holders', value: alert.holders },
-                            { label: 'Dev Wallet', value: alert.devWallet },
+                            { label: 'Liquidity', value: alert.liquidityDrained },
+                            { label: 'Price Change', value: alert.change },
                           ].map((item) => (
                             <div key={item.label} className="flex justify-between text-sm">
                               <span style={{ color: '#4DA2FF77' }}>{item.label}</span>
@@ -332,8 +354,8 @@ export default function RugAlerts() {
                           <motion.button
                             whileHover={{ scale: 1.03, boxShadow: '0 0 20px rgba(77,162,255,0.3)' }}
                             whileTap={{ scale: 0.97 }}
-                            onClick={() => navigate(`/token/${alert.token}`)}
-                            className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all duration-200"
+                            onClick={() => navigate(`/token/${alert.address || alert.token}`)}
+                            className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold"
                             style={{
                               background: 'linear-gradient(135deg, #4DA2FF, #6FE3FF)',
                               color: '#0B1C2C',
@@ -341,18 +363,38 @@ export default function RugAlerts() {
                           >
                             View Full Analysis <ChevronRight className="w-4 h-4" />
                           </motion.button>
-                          <motion.button
+                          {alert.pairUrl && (
+                            <motion.a
+                              href={alert.pairUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              whileHover={{ scale: 1.03 }}
+                              whileTap={{ scale: 0.97 }}
+                              className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold"
+                              style={{
+                                background: 'rgba(77,162,255,0.08)',
+                                border: '1px solid rgba(77,162,255,0.2)',
+                                color: '#4DA2FF',
+                              }}
+                            >
+                              View on DexScreener <ExternalLink className="w-4 h-4" />
+                            </motion.a>
+                          )}
+                          <motion.a
+                            href={`https://suiscan.xyz/mainnet/coin/${alert.address}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
                             whileHover={{ scale: 1.03 }}
                             whileTap={{ scale: 0.97 }}
-                            className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all duration-200"
+                            className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold"
                             style={{
-                              background: 'rgba(77,162,255,0.08)',
-                              border: '1px solid rgba(77,162,255,0.2)',
-                              color: '#4DA2FF',
+                              background: 'rgba(255,68,68,0.08)',
+                              border: '1px solid rgba(255,68,68,0.2)',
+                              color: '#FF4444',
                             }}
                           >
-                            Track Dev Wallet <ExternalLink className="w-4 h-4" />
-                          </motion.button>
+                            View on SuiScan <ExternalLink className="w-4 h-4" />
+                          </motion.a>
                         </div>
                       </div>
                     </motion.div>
@@ -363,7 +405,7 @@ export default function RugAlerts() {
           })}
         </AnimatePresence>
 
-        {filtered.length === 0 && (
+        {!loadingAlerts && filtered.length === 0 && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
