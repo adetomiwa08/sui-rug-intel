@@ -1,10 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import {
-  AreaChart, Area, XAxis, YAxis, CartesianGrid,
-  Tooltip, ResponsiveContainer
-} from 'recharts'
+// recharts removed - using DexScreener embed instead
 import {
   ArrowLeft, AlertTriangle, Shield, Wallet,
   TrendingUp, Users, Activity, ExternalLink, Copy, Check
@@ -32,19 +29,6 @@ function GlassCard({ children, className = '', delay = 0 }) {
       {children}
     </motion.div>
   )
-}
-
-function CustomTooltip({ active, payload, label }) {
-  if (active && payload && payload.length) {
-    return (
-      <div className="rounded-xl px-4 py-3 text-sm"
-        style={{ background: 'rgba(11,28,44,0.97)', border: '1px solid rgba(77,162,255,0.2)' }}>
-        <p style={{ color: '#6FE3FF' }}>{label}</p>
-        <p style={{ color: '#F8FAFC' }}>${payload[0].value}</p>
-      </div>
-    )
-  }
-  return null
 }
 
 function CopyRow({ label, value }) {
@@ -126,6 +110,7 @@ export default function TokenDetail() {
             websites: t.websites || [],
             socials: t.socials || [],
             buyPressure,
+            pairAddress: t.pairAddress,
             topHolders: [],
             recentTxns: [],
             chart: [
@@ -284,24 +269,21 @@ export default function TokenDetail() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
         <GlassCard delay={0.1} className="md:col-span-2">
           <h3 className="text-lg font-bold mb-1" style={{ color: '#F8FAFC' }}>Price Chart</h3>
-          <p className="text-xs mb-5" style={{ color: '#4DA2FF66' }}>24h price movement</p>
-          <ResponsiveContainer width="100%" height={220}>
-            <AreaChart data={token.chart}>
-              <defs>
-                <linearGradient id="priceGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor={token.positive ? '#4DA2FF' : '#f87171'} stopOpacity={0.3} />
-                  <stop offset="95%" stopColor={token.positive ? '#4DA2FF' : '#f87171'} stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(77,162,255,0.06)" />
-              <XAxis dataKey="time" tick={{ fill: '#4DA2FF66', fontSize: 11 }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fill: '#4DA2FF66', fontSize: 11 }} axisLine={false} tickLine={false} />
-              <Tooltip content={<CustomTooltip />} />
-              <Area type="monotone" dataKey="price"
-                stroke={token.positive ? '#4DA2FF' : '#f87171'} strokeWidth={2.5}
-                fill="url(#priceGrad)" dot={false} activeDot={{ r: 5, fill: '#6FE3FF' }} />
-            </AreaChart>
-          </ResponsiveContainer>
+          <p className="text-xs mb-4" style={{ color: '#4DA2FF66' }}>Live chart powered by DexScreener</p>
+          {token.pairAddress ? (
+            <div className="rounded-xl overflow-hidden" style={{ height: '400px' }}>
+              <iframe
+                src={`https://dexscreener.com/sui/${token.pairAddress}?embed=1&theme=dark&trades=0&info=0`}
+                style={{ width: '100%', height: '100%', border: 'none' }}
+                title="Price Chart"
+              />
+            </div>
+          ) : (
+            <div className="flex items-center justify-center rounded-xl h-48"
+              style={{ background: 'rgba(77,162,255,0.04)', border: '1px solid rgba(77,162,255,0.1)' }}>
+              <p className="text-sm" style={{ color: '#4DA2FF55' }}>Chart not available for this token</p>
+            </div>
+          )}
         </GlassCard>
 
         <GlassCard delay={0.15}>
