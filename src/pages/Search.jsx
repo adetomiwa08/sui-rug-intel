@@ -5,7 +5,6 @@ import {
   SearchIcon, Wallet, FileCode, ArrowRightLeft,
   AlertTriangle, Shield, ChevronRight, Loader, ExternalLink
 } from 'lucide-react'
-import { fetchSearch } from '../services/api.js'
 
 const riskColor = (level) => {
   if (level === 'DANGER' || level === 'RUG') return { color: '#FF4444', bg: 'rgba(255,68,68,0.1)', border: 'rgba(255,68,68,0.25)' }
@@ -58,7 +57,7 @@ function ResultCard({ result, onAnalyze, onTokenDetail }) {
             <div className="flex items-center gap-2 flex-wrap">
               <span className="text-xs uppercase tracking-wider font-bold px-2 py-0.5 rounded"
                 style={{ background: 'rgba(77,162,255,0.08)', color: '#4DA2FF' }}>
-                {result.type}
+                {result.type === 'wallet' ? 'Wallet Address' : result.type}
               </span>
               {result.flagged && (
                 <span className="text-xs font-bold px-2 py-0.5 rounded-full flex items-center gap-1"
@@ -68,7 +67,9 @@ function ResultCard({ result, onAnalyze, onTokenDetail }) {
               )}
             </div>
             <p className="text-lg font-black mt-1" style={{ color: '#F8FAFC' }}>
-              {result.symbol || result.name || result.label || result.hash}
+              {result.type === 'wallet'
+                ? `${result.address?.slice(0, 6)}...${result.address?.slice(-4)}`
+                : result.symbol || result.name || result.label || result.hash}
             </p>
             <p className="text-xs font-mono mt-0.5 break-all" style={{ color: '#4DA2FF55' }}>
               {result.address || result.hash}
@@ -124,18 +125,21 @@ function ResultCard({ result, onAnalyze, onTokenDetail }) {
       {/* Actions */}
       <div className="px-6 py-4 flex gap-3 flex-wrap"
         style={{ borderTop: '1px solid rgba(77,162,255,0.08)' }}>
-        <motion.button
-          whileHover={{ scale: 1.03, boxShadow: '0 0 20px rgba(77,162,255,0.3)' }}
-          whileTap={{ scale: 0.97 }}
-          onClick={onAnalyze}
-          className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold"
-          style={{
-            background: 'linear-gradient(135deg, #4DA2FF, #6FE3FF)',
-            color: '#0B1C2C',
-          }}
-        >
-          Full Analysis <ChevronRight className="w-4 h-4" />
-        </motion.button>
+
+        {result.type !== 'wallet' && (
+          <motion.button
+            whileHover={{ scale: 1.03, boxShadow: '0 0 20px rgba(77,162,255,0.3)' }}
+            whileTap={{ scale: 0.97 }}
+            onClick={onAnalyze}
+            className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold"
+            style={{
+              background: 'linear-gradient(135deg, #4DA2FF, #6FE3FF)',
+              color: '#0B1C2C',
+            }}
+          >
+            Full Analysis <ChevronRight className="w-4 h-4" />
+          </motion.button>
+        )}
 
         {result.type === 'token' && (
           <motion.button
@@ -208,11 +212,10 @@ export default function SearchPage() {
 
     const trimmed = q.trim()
     const isAddress = trimmed.startsWith('0x')
-    const isContract = isAddress && trimmed.length > 50
-    const isWallet = isAddress && trimmed.length <= 50
     const API = import.meta.env.VITE_API_URL || 'https://sui-rug-intel-backend.onrender.com'
 
-    if (isContract) {
+    if (isAddress) {
+      // Try DexScreener first — if found it's a token, if not it's a wallet
       fetch(`${API}/api/dex/tokens/${encodeURIComponent(trimmed)}`)
         .then(r => r.json())
         .then(data => {
@@ -237,33 +240,7 @@ export default function SearchPage() {
               suiscanUrl: `https://suiscan.xyz/mainnet/coin/${trimmed}`,
             })
           } else {
-            fetchSearch(trimmed).then(data2 => {
-              if (data2.success) {
-                setResult({
-                  type: 'token',
-                  address: trimmed,
-                  label: 'Contract Address',
-                  riskLevel: 'UNKNOWN',
-                  riskScore: 0,
-                  flagged: false,
-                  name: 'Unknown Contract',
-                  symbol: trimmed.slice(0, 8) + '...',
-                  flagReason: 'Contract not found on DexScreener — verify on SuiScan',
-                  suiscanUrl: `https://suiscan.xyz/mainnet/coin/${trimmed}`,
-                })
-              } else {
-                setResult(null)
-              }
-            })
-          }
-          setLoading(false)
-        })
-        .catch(() => { setLoading(false); setResult(null) })
-
-    } else if (isWallet) {
-      fetchSearch(trimmed)
-        .then(data => {
-          if (data.success) {
+            // Not a token — treat as wallet
             setResult({
               type: 'wallet',
               address: trimmed,
@@ -271,26 +248,32 @@ export default function SearchPage() {
               riskLevel: 'UNKNOWN',
               riskScore: 0,
               flagged: false,
-              totalTxns: data.data?.transactions?.data?.length || 'N/A',
+              totalTxns: 'N/A',
               tokensCreated: 'N/A',
               totalVolume: 'N/A',
               lastActive: 'Check SuiScan',
               flagReason: null,
               suiscanUrl: `https://suiscan.xyz/mainnet/account/${trimmed}`,
             })
-          } else {
-            setResult(null)
           }
           setLoading(false)
         })
         .catch(() => { setLoading(false); setResult(null) })
 
     } else {
+      // Search by name/symbol
       fetch(`${API}/api/dex/search?q=${encodeURIComponent(trimmed)}`)
         .then(r => r.json())
         .then(data => {
           if (data.success && data.data && data.data.length > 0) {
-            const t = data.data[0]
+            // Find exact symbol match first, otherwise highest volume
+            const sorted = [...data.data].sort((a, b) => {
+              const aVol = parseFloat(a.volume24h?.replace(/[^0-9.]/g, '') || 0)
+              const bVol = parseFloat(b.volume24h?.replace(/[^0-9.]/g, '') || 0)
+              return bVol - aVol
+            })
+            const exact = sorted.find(t => t.symbol.toUpperCase() === trimmed.toUpperCase())
+            const t = exact || sorted[0]
             setResult({
               type: 'token',
               address: t.address,
@@ -338,7 +321,6 @@ export default function SearchPage() {
   return (
     <div className="min-h-screen px-6 py-10 max-w-4xl mx-auto" style={{ color: '#F8FAFC' }}>
 
-      {/* Header */}
       <motion.div
         initial={{ opacity: 0, y: -16 }}
         animate={{ opacity: 1, y: 0 }}
@@ -357,7 +339,6 @@ export default function SearchPage() {
         </p>
       </motion.div>
 
-      {/* Search Bar */}
       <motion.form
         onSubmit={handleSearch}
         initial={{ opacity: 0, y: 10 }}
@@ -393,7 +374,6 @@ export default function SearchPage() {
         </motion.button>
       </motion.form>
 
-      {/* Loading */}
       {loading && (
         <motion.div
           initial={{ opacity: 0 }}
@@ -430,7 +410,6 @@ export default function SearchPage() {
         </motion.div>
       )}
 
-      {/* Result */}
       {!loading && result && (
         <ResultCard
           result={result}
@@ -439,7 +418,6 @@ export default function SearchPage() {
         />
       )}
 
-      {/* No result */}
       {!loading && searched && !result && (
         <motion.div
           initial={{ opacity: 0 }}
@@ -453,7 +431,6 @@ export default function SearchPage() {
         </motion.div>
       )}
 
-      {/* Not searched yet */}
       {!loading && !searched && (
         <motion.div
           initial={{ opacity: 0 }}
